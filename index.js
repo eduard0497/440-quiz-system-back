@@ -137,6 +137,87 @@ app.post("/teacher-get-questions", (req, res) => {
   });
 });
 
+app.post("/teacher-create-quiz", (req, res) => {
+  const { teacher_id, questions, passcode } = req.body;
+
+  let query = `
+  INSERT INTO ${_db_quizzes}
+  (teacher_id, passcode, questions)
+  VALUES
+  (${teacher_id}, '${passcode}', JSON_ARRAY(${questions.join(", ")}))
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      console.log(err);
+      res.json({
+        status: 0,
+        msg: "Unable to add Quiz",
+      });
+    } else {
+      res.json({
+        status: 1,
+        msg: "Quiz added successfully",
+      });
+    }
+  });
+});
+
+app.post("/teacher-get-quizzes", (req, res) => {
+  let query = `
+  SELECT 
+    ${_db_quizzes}.id,
+    ${_db_quizzes}.passcode,
+    ${_db_quizzes}.questions,
+    ${_db_teachers}.fname,
+    ${_db_teachers}.lname
+  FROM ${_db_quizzes}
+  LEFT JOIN ${_db_teachers} ON ${_db_teachers}.id = ${_db_quizzes}.teacher_id;
+`;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Unable to get the Questions and Answers",
+      });
+    } else {
+      res.json({
+        status: 1,
+        result,
+      });
+    }
+  });
+});
+
+app.post("/teacher-get-questions-for-quiz", (req, res) => {
+  const { questionIDs } = req.body;
+
+  let query = `
+  SELECT
+    ${_db_questions}.id as question_id,
+    ${_db_questions}.question as question,
+    ${_db_answers}.answer as answer
+  FROM ${_db_questions}
+  LEFT JOIN ${_db_answers} ON ${_db_answers}.question_id = ${_db_questions}.id AND ${_db_answers}.is_correct = 1
+  WHERE ${_db_questions}.id IN (${questionIDs.join(", ")});
+`;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Unable to get the Questions and Answers for the quiz",
+      });
+    } else {
+      res.json({
+        status: 1,
+        result,
+      });
+    }
+  });
+});
+
 app.listen(3000, () => {
   console.log("APP IS RUNNING ON PORT 3000");
 });

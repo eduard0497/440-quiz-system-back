@@ -19,6 +19,10 @@ const _db_questions = "questions";
 const _db_answers = "answers";
 const _db_quizzes = "quizzes";
 const _db_student_quiz_progress = "student_quiz_progress";
+//
+const quiz_pending = "pending";
+const quiz_started = "started";
+const quiz_finished = "finished";
 
 app.post("/teacher-register", async (req, res) => {
   const { fname, lname, username, password } = req.body;
@@ -208,6 +212,131 @@ app.post("/teacher-get-questions-for-quiz", (req, res) => {
       res.json({
         status: 0,
         msg: "Unable to get the Questions and Answers for the quiz",
+      });
+    } else {
+      res.json({
+        status: 1,
+        result,
+      });
+    }
+  });
+});
+
+app.post("/student-login", (req, res) => {
+  const { quiz_id, student_id, student_name, quiz_password } = req.body;
+
+  let query = `
+    SELECT *
+    FROM ${_db_quizzes}
+    WHERE id = ${quiz_id} AND passcode = '${quiz_password}'
+  `;
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Error occured",
+      });
+    } else if (!result.length) {
+      res.json({
+        status: 0,
+        msg: "Wrong quiz information",
+      });
+    } else {
+      let query = `
+      SELECT *
+      FROM ${_db_student_quiz_progress}
+      WHERE
+      student_id = ${student_id}
+      AND
+      quiz_id = ${quiz_id}
+      AND
+      student_name = '${student_name}'
+    `;
+
+      db.query(query, (err, result) => {
+        if (err) {
+          res.json({
+            status: 0,
+            msg: "Unable to get the progress info",
+          });
+        } else {
+          if (result.length === 0) {
+            let query1 = `
+                  INSERT INTO ${_db_student_quiz_progress}
+                  (student_id, student_name, quiz_id, status)
+                  VALUES
+                  (${student_id}, '${student_name}', ${quiz_id}, 'pending')
+                `;
+
+            db.query(query1, (err, result) => {
+              if (err) {
+                res.json({
+                  status: 0,
+                  msg: "Unable to get the progress info after inserting",
+                });
+              } else {
+                res.json({
+                  status: 1,
+                  progress_id: result.insertId,
+                });
+              }
+            });
+          } else {
+            res.json({
+              status: 1,
+              progress_id: result[0].id,
+            });
+          }
+        }
+      });
+    }
+  });
+});
+
+app.post("/student-get-quiz-progress", (req, res) => {
+  const { progress_id } = req.body;
+
+  let query = `
+    SELECT *
+    FROM ${_db_student_quiz_progress}
+    WHERE ${_db_student_quiz_progress}.id = ${progress_id}
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Unable to get the quiz progress",
+      });
+    } else {
+      res.json({
+        status: result[0].status,
+      });
+    }
+  });
+});
+
+app.post("/student-get-general-quiz-info", (req, res) => {
+  const { quiz_id } = req.body;
+
+  let query = `
+    SELECT
+      ${_db_quizzes}.questions,
+      ${_db_teachers}.fname as teacher_fname,
+      ${_db_teachers}.lname as teacher_lname
+    FROM
+      ${_db_quizzes}
+    LEFT JOIN
+      ${_db_teachers} ON ${_db_teachers}.id = ${_db_quizzes}.teacher_id
+    WHERE
+      ${_db_quizzes}.id = ${quiz_id}
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Unable to get quiz info",
       });
     } else {
       res.json({

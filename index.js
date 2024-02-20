@@ -347,6 +347,54 @@ app.post("/student-get-general-quiz-info", (req, res) => {
   });
 });
 
+app.post("/student-start-quiz", (req, res) => {
+  const { progress_id } = req.body;
+
+  let query = `
+    UPDATE ${_db_student_quiz_progress}
+    SET status = '${quiz_started}', started = NOW()
+    WHERE id = ${progress_id}
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Unable to start the quiz",
+      });
+    } else {
+      res.json({
+        status: 1,
+        msg: "Quiz Started",
+      });
+    }
+  });
+});
+
+app.post("/student-get-started-quiz-progress", (req, res) => {
+  const { progress_id } = req.body;
+
+  let query = `
+    SELECT *
+    FROM ${_db_student_quiz_progress}
+    WHERE ${_db_student_quiz_progress}.id = ${progress_id}
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Unable to get the quiz progress",
+      });
+    } else {
+      res.json({
+        status: 1,
+        result: result,
+      });
+    }
+  });
+});
+
 app.listen(3000, () => {
   console.log("APP IS RUNNING ON PORT 3000");
 });

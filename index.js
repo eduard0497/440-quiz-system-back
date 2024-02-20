@@ -205,7 +205,7 @@ app.post("/teacher-get-questions-for-quiz", (req, res) => {
   FROM ${_db_questions}
   LEFT JOIN ${_db_answers} ON ${_db_answers}.question_id = ${_db_questions}.id AND ${_db_answers}.is_correct = 1
   WHERE ${_db_questions}.id IN (${questionIDs.join(", ")});
-`;
+  `;
 
   db.query(query, (err, result) => {
     if (err) {
@@ -265,7 +265,7 @@ app.post("/student-login", (req, res) => {
                   INSERT INTO ${_db_student_quiz_progress}
                   (student_id, student_name, quiz_id, status)
                   VALUES
-                  (${student_id}, '${student_name}', ${quiz_id}, 'pending')
+                  (${student_id}, '${student_name}', ${quiz_id}, '${quiz_pending}')
                 `;
 
             db.query(query1, (err, result) => {
@@ -395,6 +395,181 @@ app.post("/student-get-started-quiz-progress", (req, res) => {
   });
 });
 
+app.post("/student-get-quiz-questions", (req, res) => {
+  const { quiz_id } = req.body;
+
+  let query = `
+    SELECT ${_db_quizzes}.questions FROM ${_db_quizzes} WHERE id = ${quiz_id}
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Unable to get the question IDs form quizzes table",
+      });
+    } else {
+      let questionIDs = result[0].questions;
+      let query1 = `
+          SELECT
+            ${_db_questions}.id as question_id,
+            ${_db_questions}.question as question,
+            CONCAT('[', GROUP_CONCAT(CONCAT('{"id": ', ${_db_answers}.id, ', "answer": "', ${_db_answers}.answer, '"}')), ']') AS answers
+          FROM ${_db_questions}
+          LEFT JOIN ${_db_answers} ON ${_db_answers}.question_id = ${_db_questions}.id
+          WHERE ${_db_questions}.id IN (${questionIDs.join(", ")})
+          GROUP BY ${_db_questions}.id, ${_db_questions}.question;
+        `;
+
+      db.query(query1, (err, result) => {
+        if (err) {
+          console.log(err);
+          res.json({
+            status: 0,
+            msg: "Unable to get the questions based on ID's",
+          });
+        } else {
+          result.forEach((row) => {
+            row.answers = JSON.parse(row.answers);
+          });
+          res.json({
+            status: 1,
+            result,
+          });
+        }
+      });
+    }
+  });
+
+  // res.json("ssss");
+});
+
+app.post("/student-submit-quiz", (req, res) => {
+  const { quiz_question_ids, quiz_progress_id, selected_answers } = req.body;
+
+  let query = `
+      SELECT
+      ${_db_questions}.id as question_id,
+      ${_db_answers}.id as answer_id
+      FROM ${_db_questions}
+      LEFT JOIN ${_db_answers} ON ${_db_answers}.question_id = ${_db_questions}.id AND ${_db_answers}.is_correct = 1
+      WHERE ${_db_questions}.id IN (${quiz_question_ids.join(", ")});
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      console.log(err);
+      res.json({
+        status: 0,
+        msg: "unable to get the questions and answers to compare with submitted ones",
+      });
+    } else {
+      const checkFeedback = checkAnswers(selected_answers, result);
+      const TotalQuizPoints = checkFeedback.length;
+      const StudentEarnedPoints = countCorrectAnswers(checkFeedback);
+      const FinalPercentage = calculatePercentageGrade(
+        StudentEarnedPoints,
+        TotalQuizPoints
+      );
+
+      let query1 = `
+        UPDATE ${_db_student_quiz_progress}
+        SET
+          status = '${quiz_finished}',
+          finished = NOW(),
+          total_quiz_points = ${TotalQuizPoints},
+          student_earned_points = ${StudentEarnedPoints},
+          final_percentage = ${FinalPercentage}
+        WHERE id = ${quiz_progress_id}
+      `;
+
+      db.query(query1, (err, result) => {
+        if (err) {
+          res.json({
+            status: 0,
+            msg: "Unable to submit the quiz",
+          });
+        } else {
+          res.json({
+            status: 1,
+            msg: "Quiz submitted Successfully",
+          });
+        }
+      });
+    }
+  });
+});
+
+app.post("/teacher-get-submissions-for-quiz", (req, res) => {
+  const { quiz_id } = req.body;
+
+  let query = `
+    SELECT *
+    FROM ${_db_student_quiz_progress}
+    WHERE ${_db_student_quiz_progress}.quiz_id = ${quiz_id}
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: "Unable to get the quiz progresses",
+      });
+    } else {
+      res.json({
+        status: 1,
+        result,
+      });
+    }
+  });
+});
+
 app.listen(3000, () => {
   console.log("APP IS RUNNING ON PORT 3000");
 });
+
+const checkAnswers = (selectedAnswers, correctAnswers) => {
+  // Map selected answers to an object for efficient lookup
+  const selectedAnswersMap = selectedAnswers.reduce((acc, answer) => {
+    const questionId = Object.keys(answer)[0];
+    const answerId = answer[questionId];
+    acc[questionId] = answerId;
+    return acc;
+  }, {});
+
+  // Map correct answers to an object for efficient lookup
+  const correctAnswersMap = correctAnswers.reduce(
+    (acc, { question_id, answer_id }) => {
+      acc[question_id] = answer_id;
+      return acc;
+    },
+    {}
+  );
+
+  // Get all unique question IDs
+  const allQuestionIds = new Set([
+    ...Object.keys(selectedAnswersMap),
+    ...Object.keys(correctAnswersMap),
+  ]);
+
+  // Check each question's answer
+  const results = Array.from(allQuestionIds).map((questionId) => {
+    const selectedAnswerId = selectedAnswersMap[questionId] || null;
+    const correctAnswerId = correctAnswersMap[questionId] || null;
+    const isCorrect = selectedAnswerId === correctAnswerId;
+    return { questionId, selectedAnswerId, correctAnswerId, isCorrect };
+  });
+
+  return results;
+};
+
+const countCorrectAnswers = (results) => {
+  return results.reduce((count, result) => {
+    return count + (result.isCorrect ? 1 : 0);
+  }, 0);
+};
+
+const calculatePercentageGrade = (pointsObtained, totalPossiblePoints) => {
+  const percentage = (pointsObtained / totalPossiblePoints) * 100;
+  return percentage;
+};

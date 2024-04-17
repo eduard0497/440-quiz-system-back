@@ -12,6 +12,7 @@ const db = mysql.createConnection({
   user: "root",
   password: "0497",
   database: "440_quiz_system",
+  multipleStatements: true,
 });
 
 const _db_teachers = "teachers";
@@ -23,6 +24,34 @@ const _db_student_quiz_progress = "student_quiz_progress";
 const quiz_pending = "pending";
 const quiz_started = "started";
 const quiz_finished = "finished";
+
+app.get("/clean-all-data", async (req, res) => {
+  let query = `
+  SET FOREIGN_KEY_CHECKS = 0;
+
+  TRUNCATE ${_db_teachers};
+  TRUNCATE ${_db_questions};
+  TRUNCATE ${_db_answers};
+  TRUNCATE ${_db_quizzes};
+  TRUNCATE ${_db_student_quiz_progress};
+  
+  SET FOREIGN_KEY_CHECKS = 1;
+  `;
+
+  db.query(query, (err, result) => {
+    if (err) {
+      res.json({
+        status: 0,
+        msg: err,
+      });
+    } else {
+      res.json({
+        status: 1,
+        msg: "all data cleared successfully",
+      });
+    }
+  });
+});
 
 app.post("/teacher-register", async (req, res) => {
   const { fname, lname, username, password } = req.body;

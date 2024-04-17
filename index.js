@@ -7,14 +7,46 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+const dbUrl = process.env.DATABASE_URL;
+const dbConfig = dbUrl ? parseDatabaseUrl(dbUrl) : getDefaultConfig();
+
+const db = mysql.createPool({
+  connectionLimit: 200, // Adjust as needed
+  ...dbConfig,
   multipleStatements: true,
 });
+
+function parseDatabaseUrl(url) {
+  const parsedUrl = new URL(url);
+  return {
+    host: parsedUrl.hostname,
+    port: parsedUrl.port,
+    user: parsedUrl.username,
+    password: parsedUrl.password,
+    database: parsedUrl.pathname.substring(1),
+    ssl: parsedUrl.searchParams.get("ssl") === "true",
+  };
+}
+
+function getDefaultConfig() {
+  return {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    // multipleStatements: true,
+  };
+}
+
+// const db = mysql.createConnection({
+//   host: process.env.DB_HOST,
+//   port: process.env.DB_PORT,
+//   user: process.env.DB_USER,
+//   password: process.env.DB_PASSWORD,
+//   database: process.env.DB_NAME,
+//   multipleStatements: true,
+// });
 
 const _db_teachers = "teachers";
 const _db_questions = "questions";

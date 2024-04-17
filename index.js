@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
@@ -6,37 +7,21 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const dbUrl = process.env.DATABASE_URL;
-const dbConfig = dbUrl ? parseDatabaseUrl(dbUrl) : getDefaultConfig();
+const dbConfig = {
+  host: process.env.RDS_HOSTNAME || "localhost",
+  port: process.env.RDS_PORT || 3306,
+  user: process.env.RDS_USERNAME || "root",
+  password: process.env.RDS_PASSWORD || "password",
+  database: process.env.RDS_DB_NAME || "440_quiz_system",
+  ssl: process.env.RDS_USE_SSL === "true", // Enable SSL if needed
+};
 
+// Create a connection pool
 const db = mysql.createPool({
   connectionLimit: 200, // Adjust as needed
   ...dbConfig,
   multipleStatements: true,
 });
-
-function parseDatabaseUrl(url) {
-  const parsedUrl = new URL(url);
-  return {
-    host: parsedUrl.hostname,
-    port: parsedUrl.port,
-    user: parsedUrl.username,
-    password: parsedUrl.password,
-    database: parsedUrl.pathname.substring(1),
-    ssl: parsedUrl.searchParams.get("ssl") === "true",
-  };
-}
-
-function getDefaultConfig() {
-  return {
-    host: "localhost",
-    port: 3306,
-    user: "root",
-    password: "0497",
-    database: "440_quiz_system",
-    // multipleStatements: true,
-  };
-}
 
 // const db = mysql.createConnection({
 //   host: process.env.DB_HOST,
